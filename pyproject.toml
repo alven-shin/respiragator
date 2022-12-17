@@ -1,0 +1,16 @@
+[project]
+name = "mesa-wearable-tech"
+version = "0.1.0"
+description = ""
+authors = [{ name = "OwO Swordsman", email = "owoswordsman@gmail.com" }]
+dependencies = [
+    "circuitpython-stubs>=7.3.3",
+    "adafruit-circuitpython-circuitplayground>=5.3.0",
+]
+requires-python = ">=3.10"
+
+[tool]
+[tool.pdm]
+
+[tool.pyright]
+pythonVersion = "3.4"

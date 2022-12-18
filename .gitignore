@@ -1,2 +1,4 @@
 /*.egg-info
 /.vscode
+.pdm.toml
+/__pypackages__

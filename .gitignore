@@ -2,3 +2,4 @@
 /.vscode
 .pdm.toml
 /__pypackages__
+/target

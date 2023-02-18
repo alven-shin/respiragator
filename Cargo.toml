@@ -1,6 +1,2 @@
 [workspace]
 members = ["app"]
-
-[package]
-name = "app"
-version = "0.1.0"

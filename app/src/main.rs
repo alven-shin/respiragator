@@ -1,83 +1,69 @@
-// See the "macOS permissions note" in README.md before running this on macOS
-// Big Sur or later.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use futures::StreamExt;
-use std::error::Error;
-use std::time::Duration;
-use tokio::time;
-use uuid::Uuid;
+use std::sync::mpsc::{self, SyncSender};
+use std::thread;
 
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
-use btleplug::platform::Manager;
+use app::bluefruit::bluefruit_reciever;
+use app::{App, Message};
+use egui_macroquad::egui::{self, CentralPanel, ScrollArea};
+use egui_macroquad::macroquad;
+use egui_macroquad::macroquad::prelude::*;
 
-type Bluefruit = btleplug::platform::Peripheral;
+#[macroquad::main("Project Respirate")]
+async fn main() {
+    let mut state = App::default();
+    let (tx, rx) = mpsc::sync_channel(1);
+    background_thread(tx);
 
-const UART_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
-const UART_CHARACTERISTIC_UUID: Uuid = Uuid::from_u128(0x6e400003_b5a3_f393_e0a9_e50e24dcca9e);
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let bluefruit = get_bluefruit().await?;
-    let is_connected = bluefruit.is_connected().await?;
-    if !is_connected {
-        bluefruit.connect().await?
-    }
-
-    let is_connected = bluefruit.is_connected().await?;
-    bluefruit.discover_services().await?;
-
-    let uart_service = bluefruit
-        .services()
-        .into_iter()
-        .filter(|service| service.uuid == UART_SERVICE_UUID)
-        .next()
-        .unwrap();
-    let uart_characteristic = uart_service
-        .characteristics
-        .into_iter()
-        .filter(|x| x.uuid == UART_CHARACTERISTIC_UUID)
-        .next()
-        .unwrap();
-
-    bluefruit.subscribe(&uart_characteristic).await?;
-    let mut notifs = bluefruit.notifications().await?;
-
-    while let Ok(Some(data)) = tokio::time::timeout(Duration::from_secs(5), notifs.next()).await {
-        let x = String::from_utf8_lossy(&data.value);
-        print!("{x}");
-    }
-
-    if is_connected {
-        bluefruit.disconnect().await?
-    }
-    Ok(())
-}
-
-async fn get_bluefruit() -> Result<Bluefruit, Box<dyn Error>> {
-    let manager = Manager::new().await?;
-    let adapter_list = manager.adapters().await?;
-    if adapter_list.is_empty() {
-        return Err("No adapters detected".into());
-    }
-
-    for adapter in adapter_list.iter() {
-        adapter.start_scan(ScanFilter::default()).await?;
-        time::sleep(Duration::from_secs(10)).await;
-        let peripherals = adapter.peripherals().await?;
-
-        if peripherals.is_empty() {
-            continue;
-        }
-
-        // All peripheral devices in range
-        for peripheral in peripherals {
-            let properties = peripheral.properties().await?;
-            if let Some(true) = properties
-                .and_then(|x| Some(x.local_name.as_deref() == Some("Adafruit Bluefruit LE")))
-            {
-                return Ok(peripheral);
+    loop {
+        if let Ok(message) = rx.try_recv() {
+            match message {
+                Message::ConnectionChanged(is_connected) => (),
+                Message::Log(message) => {
+                    state.logs.push_str(&message);
+                    state.logs.push_str("\n\n");
+                }
+                Message::ResistanceValue(new_value) => {
+                    state.resistance_value = new_value;
+                }
             }
         }
+        clear_background(BLACK);
+
+        draw_centered_circle(state.resistance_value);
+        draw_egui(&state);
+        next_frame().await
     }
-    Err("Bluefruit not found".into())
+}
+
+fn draw_egui(state: &App) {
+    egui_macroquad::ui(|ctx| {
+        egui::Window::new("Project Respirate").show(ctx, |ui| {
+            ui.collapsing("Logs", |ui| {
+                ScrollArea::vertical().show(ui, |ui| ui.label(&state.logs));
+            });
+        });
+    });
+    egui_macroquad::draw();
+}
+
+fn draw_centered_circle(radius: u8) {
+    let x_center = screen_width() / 2.;
+    let y_center = screen_height() / 2.;
+    draw_circle(
+        x_center,
+        y_center,
+        radius as f32 * 10.,
+        Color::from_rgba(139, 0, 0, 255),
+    );
+}
+
+fn background_thread(tx: SyncSender<Message>) {
+    thread::spawn(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async { bluefruit_reciever(tx).await });
+    });
 }

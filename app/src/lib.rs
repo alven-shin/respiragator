@@ -10,7 +10,6 @@ pub mod gui;
 pub struct App {
     pub bluefruit_connected: bool,
     pub resistance_value: u8,
-    pub logs: String,
     pub rx: Receiver<Message>,
 }
 
@@ -21,7 +20,6 @@ impl Default for App {
         Self {
             bluefruit_connected: false,
             resistance_value: 0,
-            logs: String::new(),
             rx,
         }
     }
@@ -40,5 +38,4 @@ fn background_thread(tx: SyncSender<Message>) {
 pub enum Message {
     ConnectionChanged(bool),
     ResistanceValue(u8),
-    Log(String),
 }

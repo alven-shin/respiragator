@@ -4,12 +4,16 @@ use std::{
 };
 
 use bluefruit::bluefruit_reciever;
+use ringbuffer::RingBuffer;
 
 pub mod bluefruit;
 pub mod gui;
+pub mod ringbuffer;
+
 pub struct App {
     pub bluefruit_connected: bool,
-    pub resistance_value: u8,
+    // pub data: ConstGenericRingBuffer<u8, 1024>,
+    pub resistance_data: RingBuffer<1024>,
     pub rx: Receiver<Message>,
 }
 
@@ -19,7 +23,7 @@ impl Default for App {
         background_thread(tx);
         Self {
             bluefruit_connected: false,
-            resistance_value: 0,
+            resistance_data: RingBuffer::new(),
             rx,
         }
     }
@@ -37,5 +41,5 @@ fn background_thread(tx: SyncSender<Message>) {
 
 pub enum Message {
     ConnectionChanged(bool),
-    ResistanceValue(u8),
+    ResistanceData(Vec<u8>),
 }

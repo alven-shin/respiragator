@@ -1,6 +1,3 @@
-// See the "macOS permissions note" in README.md before running this on macOS
-// Big Sur or later.
-
 use futures::StreamExt;
 use std::error::Error;
 use std::sync::mpsc::SyncSender;
@@ -52,11 +49,7 @@ async fn handle_messages(tx: &SyncSender<Message>) -> Result<(), Box<dyn Error>>
     let mut notifs = bluefruit.notifications().await?;
 
     while let Ok(Some(data)) = tokio::time::timeout(Duration::from_secs(5), notifs.next()).await {
-        // let x = String::from_utf8_lossy(&data.value);
-        // print!("{x}");
-        if let Some(value) = data.value.last().copied() {
-            tx.send(Message::ResistanceValue(value))?;
-        }
+        tx.send(Message::ResistanceData(data.value))?;
     }
 
     if is_connected {

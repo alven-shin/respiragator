@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use std::error::Error;
+use std::fmt::Display;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 use tokio::time;
@@ -16,8 +17,21 @@ const UART_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24
 const UART_CHARACTERISTIC_UUID: Uuid = Uuid::from_u128(0x6e400003_b5a3_f393_e0a9_e50e24dcca9e);
 
 pub async fn bluefruit_reciever(tx: SyncSender<Message>) {
-    if let Err(error) = handle_messages(&tx).await {
-        tracing::error!(error);
+    loop {
+        match handle_messages(&tx).await {
+            Ok(()) => (),
+            Err(error) => {
+                if let Some(error) = error.downcast_ref::<BluefruitError>() {
+                    match *error {
+                        BluefruitError::NotFound => (),
+                    }
+                } else {
+                    dbg!();
+                    tracing::error!(error);
+                    Err::<(), _>(error).unwrap();
+                }
+            }
+        }
     }
 }
 
@@ -29,7 +43,6 @@ async fn handle_messages(tx: &SyncSender<Message>) -> Result<(), Box<dyn Error>>
         bluefruit.connect().await?
     }
 
-    let is_connected = bluefruit.is_connected().await?;
     bluefruit.discover_services().await?;
 
     let uart_service = bluefruit
@@ -52,8 +65,12 @@ async fn handle_messages(tx: &SyncSender<Message>) -> Result<(), Box<dyn Error>>
         tx.send(Message::ResistanceData(data.value))?;
     }
 
-    if is_connected {
-        bluefruit.disconnect().await?
+    if let Ok(is_connected) =
+        tokio::time::timeout(Duration::from_secs(5), bluefruit.is_connected()).await
+    {
+        if is_connected? {
+            bluefruit.disconnect().await?;
+        }
     }
     Ok(())
 }
@@ -68,8 +85,12 @@ async fn get_bluefruit() -> Result<Bluefruit, Box<dyn Error>> {
 
     for adapter in adapter_list {
         tracing::info!("Scanning for devices with {:?}", adapter);
-        adapter.start_scan(ScanFilter::default()).await?;
+        let mut filter = ScanFilter::default();
+        filter.services = vec![UART_SERVICE_UUID];
+
+        adapter.start_scan(filter).await?;
         time::sleep(Duration::from_secs(10)).await;
+        adapter.stop_scan().await?;
         let peripherals = adapter.peripherals().await?;
 
         if peripherals.is_empty() {
@@ -93,5 +114,24 @@ async fn get_bluefruit() -> Result<Bluefruit, Box<dyn Error>> {
             }
         }
     }
-    Err("Bluefruit not found".into())
+    Err(Box::new(BluefruitError::NotFound))
 }
+
+#[derive(Debug, Clone, Copy)]
+enum BluefruitError {
+    NotFound,
+}
+
+impl Display for BluefruitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Bluefruit Error: {}",
+            match self {
+                Self::NotFound => "Not Found!",
+            }
+        )
+    }
+}
+
+impl Error for BluefruitError {}

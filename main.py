@@ -9,9 +9,9 @@ from analogio import AnalogIn
 def main() -> None:
     # cp.pixels.brightness = 0.1
     uart = busio.UART(board.TX, board.RX, baudrate=9600)
-    # analog_in = AnalogIn(board.A1)
+    analog_in = AnalogIn(board.A1)
 
-    sum = 0
+    # sum = 0
     # for _ in range(1000):
     while True:
         # accelerometer
@@ -27,7 +27,9 @@ def main() -> None:
         # data = uart.read(32)
         # uart.write(bytes(str(z) + "\n", "ascii"))
         try:
-            uart.write(int.to_bytes(int(z), 1, "big"))
+            print(int.to_bytes(int(analog_in.value / 5) - 100, 1, "big"))
+            uart.write(int.to_bytes(int(analog_in.value / 10) - 100, 1, "big"))
+            # uart.write(int.to_bytes(int(z), 1, "big"))
         except OverflowError:
             uart.write(b"\0")
         # print(int(z))

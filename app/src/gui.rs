@@ -1,7 +1,7 @@
 use eframe::{
     egui::{
         self,
-        plot::{Line, Plot, PlotPoints},
+        plot::{Line, Plot},
         Sense,
     },
     epaint::Vec2,
@@ -35,7 +35,7 @@ impl eframe::App for App {
                 });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            let r = self.resistance_data.last() as f32 * 10.;
+            let r = self.resistance_data.last() as f32;
             let size = Vec2::splat(2.0 * r + 5.0);
             ui.centered_and_justified(|ui| {
                 let (rect, _response) = ui.allocate_at_least(size, Sense::hover());
